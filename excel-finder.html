@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Keyword Search</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for better aesthetics and responsiveness */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align to start to allow scrolling */
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 900px;
+            margin-top: 20px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .input-field {
+            padding: 12px 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            width: 100%;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        .btn {
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo 600 */
+            color: #ffffff;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Indigo 700 */
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* Gray 500 */
+            color: #ffffff;
+            border: none;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563; /* Gray 600 */
+            transform: translateY(-2px);
+        }
+        .results-container {
+            margin-top: 25px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow-x: auto; /* Enable horizontal scrolling for tables */
+            max-height: 500px; /* Limit height for scrollable results */
+            overflow-y: auto;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .results-table th, .results-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            white-space: nowrap; /* Prevent text wrapping in cells */
+        }
+        .results-table th {
+            background-color: #f9fafb; /* Light gray for header */
+            font-weight: 600;
+            color: #374151;
+            position: sticky; /* Sticky header */
+            top: 0;
+            z-index: 10;
+        }
+        .results-table tr:last-child td {
+            border-bottom: none;
+        }
+        .results-table tbody tr:hover {
+            background-color: #f3f4f6; /* Hover effect for rows */
+        }
+        .message-box {
+            background-color: #fefcbf; /* Yellow 100 */
+            color: #92400e; /* Yellow 800 */
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none; /* Hidden by default */
+            align-items: center;
+            gap: 10px;
+        }
+        .message-box.show {
+            display: flex;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: none; /* Hidden by default */
+        }
+        .loading-spinner.show {
+            display: block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive adjustments */
+        @media (min-width: 640px) {
+            .input-group {
+                flex-direction: row;
+                align-items: flex-end;
+            }
+            .input-field {
+                flex-grow: 1;
+            }
+            .btn-group {
+                display: flex;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Excel Keyword Search Tool</h1>
+
+        <div id="messageBox" class="message-box">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span id="messageText"></span>
+        </div>
+
+        <div class="input-group">
+            <div class="flex-1">
+                <label for="excelFile" class="block text-sm font-medium text-gray-700 mb-1">Upload Excel File (.xlsx, .xls)</label>
+                <input type="file" id="excelFile" accept=".xlsx, .xls" class="input-field cursor-pointer">
+            </div>
+            <div class="flex-1">
+                <label for="sheetSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Sheet</label>
+                <select id="sheetSelect" class="input-field" disabled>
+                    <option value="">-- Upload file to see sheets --</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label for="keyword" class="block text-sm font-medium text-gray-700 mb-1">Enter Keyword to Search</label>
+                <input type="text" id="keyword" placeholder="e.g., 'Apple', 'ID-123'" class="input-field">
+            </div>
+            <div class="btn-group">
+                <button id="searchButton" class="btn btn-primary">
+                    <div id="loadingSpinner" class="loading-spinner mr-2"></div>
+                    Search
+                </button>
+                <button id="clearButton" class="btn btn-secondary">Clear Results</button>
+            </div>
+        </div>
+
+        <div id="resultsContainer" class="results-container hidden">
+            <table id="resultsTable" class="results-table">
+                <thead>
+                    <tr id="tableHeader">
+                        <!-- Table headers will be inserted here by JS -->
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Search results will be inserted here by JS -->
+                </tbody>
+            </table>
+        </div>
+        <p id="noResultsMessage" class="text-center text-gray-600 mt-4 hidden">No results found for your search.</p>
+    </div>
+
+    <!-- SheetJS CDN for Excel parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        // Get references to DOM elements
+        const excelFileInput = document.getElementById('excelFile');
+        const sheetSelect = document.getElementById('sheetSelect'); // New: Sheet selection dropdown
+        const keywordInput = document.getElementById('keyword');
+        const searchButton = document.getElementById('searchButton');
+        const clearButton = document.getElementById('clearButton');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const tableHeader = document.getElementById('tableHeader');
+        const tableBody = document.getElementById('tableBody');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const noResultsMessage = document.getElementById('noResultsMessage');
+
+        let workbookGlobal = null; // Store the workbook object globally
+        let excelData = []; // To store parsed Excel data of the selected sheet
+        let headerRow = []; // To store the header row for table display
+
+        /**
+         * Displays a message box with the given text and type.
+         * @param {string} message - The message to display.
+         * @param {string} type - 'success', 'error', 'warning'. Determines styling.
+         */
+        function showMessage(message, type) {
+            messageText.textContent = message;
+            messageBox.className = 'message-box show'; // Reset classes
+            if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+            } else if (type === 'warning') {
+                messageBox.classList.add('bg-yellow-100', 'text-yellow-800');
+            } else if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+            }
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, 5000);
+        }
+
+        /**
+         * Hides the message box.
+         */
+        function hideMessage() {
+            messageBox.classList.remove('show');
+        }
+
+        /**
+         * Shows or hides the loading spinner.
+         * @param {boolean} show - True to show, false to hide.
+         */
+        function toggleLoadingSpinner(show) {
+            if (show) {
+                loadingSpinner.classList.add('show');
+                searchButton.disabled = true;
+                searchButton.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                loadingSpinner.classList.remove('show');
+                searchButton.disabled = false;
+                searchButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Populates the sheet selection dropdown with sheet names from the workbook.
+         * @param {Array<string>} sheetNames - An array of sheet names.
+         */
+        function populateSheetSelect(sheetNames) {
+            sheetSelect.innerHTML = ''; // Clear existing options
+            if (sheetNames.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '-- No sheets found --';
+                sheetSelect.appendChild(option);
+                sheetSelect.disabled = true;
+                return;
+            }
+
+            sheetNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                sheetSelect.appendChild(option);
+            });
+            sheetSelect.disabled = false;
+            // Automatically select the first sheet
+            if (sheetNames.length > 0) {
+                sheetSelect.value = sheetNames[0];
+                loadSheetData(sheetNames[0]); // Load data for the first sheet automatically
+            }
+        }
+
+        /**
+         * Loads data from the selected sheet into excelData and headerRow.
+         * @param {string} sheetName - The name of the sheet to load.
+         */
+        function loadSheetData(sheetName) {
+            if (!workbookGlobal || !sheetName) {
+                excelData = [];
+                headerRow = [];
+                clearResults();
+                return;
+            }
+
+            const worksheet = workbookGlobal.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (jsonData.length === 0) {
+                showMessage(`Sheet "${sheetName}" is empty.`, 'warning');
+                excelData = [];
+                headerRow = [];
+                clearResults();
+                return;
+            }
+
+            headerRow = jsonData[0];
+            excelData = jsonData.slice(1);
+            clearResults(); // Clear results when sheet changes
+        }
+
+
+        /**
+         * Handles the file upload and parses the Excel data.
+         */
+        excelFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                workbookGlobal = null;
+                excelData = [];
+                headerRow = [];
+                populateSheetSelect([]); // Clear sheet dropdown
+                clearResults();
+                return;
+            }
+
+            hideMessage();
+            toggleLoadingSpinner(true);
+
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    workbookGlobal = workbook; // Store workbook globally
+
+                    populateSheetSelect(workbook.SheetNames); // Populate dropdown with all sheet names
+
+                    showMessage(`File "${file.name}" loaded successfully. Select a sheet and search.`, 'success');
+                } catch (error) {
+                    console.error('Error reading Excel file:', error);
+                    showMessage('Failed to read Excel file. Please ensure it is a valid .xlsx or .xls file.', 'error');
+                    workbookGlobal = null;
+                    excelData = [];
+                    headerRow = [];
+                    populateSheetSelect([]);
+                    clearResults();
+                } finally {
+                    toggleLoadingSpinner(false);
+                }
+            };
+
+            reader.onerror = (error) => {
+                console.error('FileReader error:', error);
+                showMessage('Error reading file. Please try again.', 'error');
+                toggleLoadingSpinner(false);
+                workbookGlobal = null;
+                excelData = [];
+                headerRow = [];
+                populateSheetSelect([]);
+                clearResults();
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Event listener for sheet selection change
+        sheetSelect.addEventListener('change', (event) => {
+            const selectedSheet = event.target.value;
+            if (selectedSheet) {
+                loadSheetData(selectedSheet);
+                showMessage(`Sheet "${selectedSheet}" selected. Ready to search.`, 'success');
+            } else {
+                excelData = [];
+                headerRow = [];
+                clearResults();
+                showMessage('No sheet selected or sheet is empty.', 'warning');
+            }
+        });
+
+        /**
+         * Performs the search based on the keyword and displays results.
+         */
+        searchButton.addEventListener('click', () => {
+            const keyword = keywordInput.value.trim();
+            const selectedSheet = sheetSelect.value;
+
+            if (!workbookGlobal) {
+                showMessage('Please upload an Excel file first.', 'warning');
+                return;
+            }
+
+            if (!selectedSheet) {
+                showMessage('Please select a sheet to search from.', 'warning');
+                return;
+            }
+
+            if (excelData.length === 0) {
+                 showMessage(`The selected sheet "${selectedSheet}" is empty or could not be loaded.`, 'warning');
+                 return;
+            }
+
+            if (!keyword) {
+                showMessage('Please enter a keyword to search.', 'warning');
+                return;
+            }
+
+            hideMessage();
+            toggleLoadingSpinner(true);
+            clearResults(); // Clear previous results
+
+            const lowerCaseKeyword = keyword.toLowerCase();
+            const matchingRows = [];
+
+            // Iterate through each data row
+            excelData.forEach((row, rowIndex) => {
+                // Iterate through each cell in the row
+                let rowMatches = false;
+                // Ensure row is an array before iterating
+                if (Array.isArray(row)) {
+                    row.forEach(cell => {
+                        if (cell !== null && cell !== undefined) {
+                            // Convert cell content to string and check for keyword
+                            if (String(cell).toLowerCase().includes(lowerCaseKeyword)) {
+                                rowMatches = true;
+                                return; // Exit inner loop if match found in this row
+                            }
+                        }
+                    });
+                }
+                if (rowMatches) {
+                    matchingRows.push(row);
+                }
+            });
+
+            if (matchingRows.length > 0) {
+                displayResults(matchingRows);
+                showMessage(`Found ${matchingRows.length} matching rows in sheet "${selectedSheet}".`, 'success');
+            } else {
+                noResultsMessage.classList.remove('hidden');
+                resultsContainer.classList.add('hidden');
+                showMessage(`No matching rows found for the keyword in sheet "${selectedSheet}".`, 'warning');
+            }
+            toggleLoadingSpinner(false);
+        });
+
+        /**
+         * Clears the search results and resets the display.
+         */
+        clearButton.addEventListener('click', () => {
+            clearResults();
+            keywordInput.value = '';
+            excelFileInput.value = ''; // Clear file input
+            workbookGlobal = null;
+            excelData = [];
+            headerRow = [];
+            populateSheetSelect([]); // Reset sheet dropdown
+            hideMessage();
+            showMessage('Results cleared. Please upload a new file or search again.', 'success');
+        });
+
+        /**
+         * Clears the table body and hides the results container.
+         */
+        function clearResults() {
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+            resultsContainer.classList.add('hidden');
+            noResultsMessage.classList.add('hidden');
+        }
+
+        /**
+         * Displays the search results in a table.
+         * @param {Array<Array<any>>} results - An array of arrays, where each inner array is a matching row.
+         */
+        function displayResults(results) {
+            // Clear existing headers and body
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (headerRow.length === 0 && results.length > 0) {
+                // Fallback: If headerRow wasn't explicitly set (e.g., empty file then data added),
+                // infer from first result. This might not be ideal if the first row isn't truly a header.
+                headerRow = Array.from({ length: results[0].length }, (_, i) => `Column ${i + 1}`);
+            }
+
+            // Create table headers
+            headerRow.forEach(headerText => {
+                const th = document.createElement('th');
+                th.textContent = headerText;
+                tableHeader.appendChild(th);
+            });
+
+            // Populate table body with results
+            results.forEach(rowData => {
+                const tr = document.createElement('tr');
+                // Ensure rowData is an array before iterating
+                if (Array.isArray(rowData)) {
+                    rowData.forEach(cellData => {
+                        const td = document.createElement('td');
+                        td.textContent = cellData !== null && cellData !== undefined ? String(cellData) : '';
+                        tr.appendChild(td);
+                    });
+                }
+                tableBody.appendChild(tr);
+            });
+
+            resultsContainer.classList.remove('hidden');
+            noResultsMessage.classList.add('hidden');
+        }
+
+        // Initial state: clear results and hide messages
+        clearResults();
+        hideMessage();
+        populateSheetSelect([]); // Initialize sheet dropdown as empty/disabled
+    </script>
+</body>
+</html>
