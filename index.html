@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel Keyword Search</title>
+    <title>Product Search</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -149,7 +149,7 @@
 </head>
 <body>
     <div class="container">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Excel Keyword Search Tool</h1>
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Product Rate Chart Search</h1>
 
         <div id="messageBox" class="message-box">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -158,18 +158,8 @@
 
         <div class="input-group">
             <div class="flex-1">
-                <label for="excelFile" class="block text-sm font-medium text-gray-700 mb-1">Upload Excel File (.xlsx, .xls)</label>
-                <input type="file" id="excelFile" accept=".xlsx, .xls" class="input-field cursor-pointer">
-            </div>
-            <div class="flex-1">
-                <label for="sheetSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Sheet</label>
-                <select id="sheetSelect" class="input-field" disabled>
-                    <option value="">-- Upload file to see sheets --</option>
-                </select>
-            </div>
-            <div class="flex-1">
-                <label for="keyword" class="block text-sm font-medium text-gray-700 mb-1">Enter Keyword to Search</label>
-                <input type="text" id="keyword" placeholder="e.g., 'Apple', 'ID-123'" class="input-field">
+                <label for="keyword" class="block text-sm font-medium text-gray-700 mb-1">Enter Product Keyword</label>
+                <input type="text" id="keyword" placeholder="e.g., 'Shampoo', 'Soap'" class="input-field">
             </div>
             <div class="btn-group">
                 <button id="searchButton" class="btn btn-primary">
@@ -195,13 +185,22 @@
         <p id="noResultsMessage" class="text-center text-gray-600 mt-4 hidden">No results found for your search.</p>
     </div>
 
-    <!-- SheetJS CDN for Excel parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
     <script>
+        // --- IMPORTANT: REPLACE WITH YOUR GOOGLE SHEET DETAILS ---
+        // 1. Get your SPREADSHEET_ID from the Google Sheet URL:
+        //    Example URL: https://docs.google.com/spreadsheets/d/1A2B3C4D5E6F7G8H9I0J/edit#gid=0
+        //    SPREADSHEET_ID would be: 1A2B3C4D5E6F7G8H9I0J
+        const SPREADSHEET_ID = '1NXd9nH41VBDTczdyHXNZnuvEpam-YxhU0UdGVIc7HEU'; // <--- REPLACE THIS
+
+        // 2. Get your SHEET_NAME (usually the tab name at the bottom of the sheet)
+        //    If your sheet tab is named "Products", then SHEET_NAME = 'Products'
+        const SHEET_NAME = 'PriceList'; // <--- REPLACE THIS (e.g., 'Products', 'Rate Chart')
+
+        // Construct the Google Sheets CSV export URL
+        const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+        // --------------------------------------------------------
+
         // Get references to DOM elements
-        const excelFileInput = document.getElementById('excelFile');
-        const sheetSelect = document.getElementById('sheetSelect'); // New: Sheet selection dropdown
         const keywordInput = document.getElementById('keyword');
         const searchButton = document.getElementById('searchButton');
         const clearButton = document.getElementById('clearButton');
@@ -213,8 +212,7 @@
         const loadingSpinner = document.getElementById('loadingSpinner');
         const noResultsMessage = document.getElementById('noResultsMessage');
 
-        let workbookGlobal = null; // Store the workbook object globally
-        let excelData = []; // To store parsed Excel data of the selected sheet
+        let excelData = []; // To store parsed Google Sheet data
         let headerRow = []; // To store the header row for table display
 
         /**
@@ -262,152 +260,71 @@
         }
 
         /**
-         * Populates the sheet selection dropdown with sheet names from the workbook.
-         * @param {Array<string>} sheetNames - An array of sheet names.
+         * Fetches data from the Google Sheet URL and parses it.
          */
-        function populateSheetSelect(sheetNames) {
-            sheetSelect.innerHTML = ''; // Clear existing options
-            if (sheetNames.length === 0) {
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = '-- No sheets found --';
-                sheetSelect.appendChild(option);
-                sheetSelect.disabled = true;
-                return;
-            }
-
-            sheetNames.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                sheetSelect.appendChild(option);
-            });
-            sheetSelect.disabled = false;
-            // Automatically select the first sheet
-            if (sheetNames.length > 0) {
-                sheetSelect.value = sheetNames[0];
-                loadSheetData(sheetNames[0]); // Load data for the first sheet automatically
-            }
-        }
-
-        /**
-         * Loads data from the selected sheet into excelData and headerRow.
-         * @param {string} sheetName - The name of the sheet to load.
-         */
-        function loadSheetData(sheetName) {
-            if (!workbookGlobal || !sheetName) {
-                excelData = [];
-                headerRow = [];
-                clearResults();
-                return;
-            }
-
-            const worksheet = workbookGlobal.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-            if (jsonData.length === 0) {
-                showMessage(`Sheet "${sheetName}" is empty.`, 'warning');
-                excelData = [];
-                headerRow = [];
-                clearResults();
-                return;
-            }
-
-            headerRow = jsonData[0];
-            excelData = jsonData.slice(1);
-            clearResults(); // Clear results when sheet changes
-        }
-
-
-        /**
-         * Handles the file upload and parses the Excel data.
-         */
-        excelFileInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (!file) {
-                workbookGlobal = null;
-                excelData = [];
-                headerRow = [];
-                populateSheetSelect([]); // Clear sheet dropdown
-                clearResults();
-                return;
-            }
-
-            hideMessage();
+        async function fetchGoogleSheetData() {
             toggleLoadingSpinner(true);
+            hideMessage();
+            clearResults(); // Clear previous results
 
-            const reader = new FileReader();
+            if (SPREADSHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
+                showMessage('Please update the SPREADSHEET_ID and SHEET_NAME in the code to your actual Google Sheet details.', 'error');
+                toggleLoadingSpinner(false);
+                return;
+            }
 
-            reader.onload = (e) => {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    workbookGlobal = workbook; // Store workbook globally
+            try {
+                const response = await fetch(GOOGLE_SHEET_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}. Ensure the sheet is published to the web.`);
+                }
+                const csvText = await response.text();
 
-                    populateSheetSelect(workbook.SheetNames); // Populate dropdown with all sheet names
+                // Parse CSV data
+                const rows = csvText.split('\n').map(row => {
+                    // Simple CSV parsing for comma-separated values,
+                    // handles quoted fields with commas inside.
+                    const regex = /(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^,]*))/g;
+                    let match;
+                    const result = [];
+                    while ((match = regex.exec(row)) !== null) {
+                        // If a quoted group is matched, use it; otherwise, use the unquoted group
+                        result.push(match[1] !== undefined ? match[1].replace(/\"\"/g, '\"') : match[2]);
+                    }
+                    return result;
+                }).filter(row => row.length > 0 && row.some(cell => cell.trim() !== '')); // Filter out empty rows
 
-                    showMessage(`File "${file.name}" loaded successfully. Select a sheet and search.`, 'success');
-                } catch (error) {
-                    console.error('Error reading Excel file:', error);
-                    showMessage('Failed to read Excel file. Please ensure it is a valid .xlsx or .xls file.', 'error');
-                    workbookGlobal = null;
+                if (rows.length === 0) {
+                    showMessage('The Google Sheet is empty or could not be parsed.', 'warning');
                     excelData = [];
                     headerRow = [];
-                    populateSheetSelect([]);
-                    clearResults();
-                } finally {
-                    toggleLoadingSpinner(false);
+                    return;
                 }
-            };
 
-            reader.onerror = (error) => {
-                console.error('FileReader error:', error);
-                showMessage('Error reading file. Please try again.', 'error');
+                headerRow = rows[0];
+                excelData = rows.slice(1);
+
+                showMessage(`Data loaded successfully from Google Sheet "${SHEET_NAME}".`, 'success');
+
+            } catch (error) {
+                console.error('Error fetching or parsing Google Sheet:', error);
+                showMessage(`Failed to load data from Google Sheet. Error: ${error.message}. Please check the ID/Name and sharing settings.`, 'error');
+                excelData = [];
+                headerRow = [];
+            } finally {
                 toggleLoadingSpinner(false);
-                workbookGlobal = null;
-                excelData = [];
-                headerRow = [];
-                populateSheetSelect([]);
-                clearResults();
-            };
-
-            reader.readAsArrayBuffer(file);
-        });
-
-        // Event listener for sheet selection change
-        sheetSelect.addEventListener('change', (event) => {
-            const selectedSheet = event.target.value;
-            if (selectedSheet) {
-                loadSheetData(selectedSheet);
-                showMessage(`Sheet "${selectedSheet}" selected. Ready to search.`, 'success');
-            } else {
-                excelData = [];
-                headerRow = [];
-                clearResults();
-                showMessage('No sheet selected or sheet is empty.', 'warning');
             }
-        });
+        }
 
         /**
          * Performs the search based on the keyword and displays results.
          */
         searchButton.addEventListener('click', () => {
             const keyword = keywordInput.value.trim();
-            const selectedSheet = sheetSelect.value;
-
-            if (!workbookGlobal) {
-                showMessage('Please upload an Excel file first.', 'warning');
-                return;
-            }
-
-            if (!selectedSheet) {
-                showMessage('Please select a sheet to search from.', 'warning');
-                return;
-            }
 
             if (excelData.length === 0) {
-                 showMessage(`The selected sheet "${selectedSheet}" is empty or could not be loaded.`, 'warning');
-                 return;
+                showMessage('Data not loaded. Please ensure the Google Sheet ID/Name is correct and it is published to the web.', 'warning');
+                return;
             }
 
             if (!keyword) {
@@ -423,8 +340,7 @@
             const matchingRows = [];
 
             // Iterate through each data row
-            excelData.forEach((row, rowIndex) => {
-                // Iterate through each cell in the row
+            excelData.forEach((row) => {
                 let rowMatches = false;
                 // Ensure row is an array before iterating
                 if (Array.isArray(row)) {
@@ -445,11 +361,11 @@
 
             if (matchingRows.length > 0) {
                 displayResults(matchingRows);
-                showMessage(`Found ${matchingRows.length} matching rows in sheet "${selectedSheet}".`, 'success');
+                showMessage(`Found ${matchingRows.length} matching rows.`, 'success');
             } else {
                 noResultsMessage.classList.remove('hidden');
                 resultsContainer.classList.add('hidden');
-                showMessage(`No matching rows found for the keyword in sheet "${selectedSheet}".`, 'warning');
+                showMessage('No matching rows found for the keyword.', 'warning');
             }
             toggleLoadingSpinner(false);
         });
@@ -460,13 +376,8 @@
         clearButton.addEventListener('click', () => {
             clearResults();
             keywordInput.value = '';
-            excelFileInput.value = ''; // Clear file input
-            workbookGlobal = null;
-            excelData = [];
-            headerRow = [];
-            populateSheetSelect([]); // Reset sheet dropdown
             hideMessage();
-            showMessage('Results cleared. Please upload a new file or search again.', 'success');
+            showMessage('Results cleared. Ready for a new search.', 'success');
         });
 
         /**
@@ -489,8 +400,7 @@
             tableBody.innerHTML = '';
 
             if (headerRow.length === 0 && results.length > 0) {
-                // Fallback: If headerRow wasn't explicitly set (e.g., empty file then data added),
-                // infer from first result. This might not be ideal if the first row isn't truly a header.
+                // Fallback: If headerRow wasn't explicitly set, infer from first result.
                 headerRow = Array.from({ length: results[0].length }, (_, i) => `Column ${i + 1}`);
             }
 
@@ -522,7 +432,8 @@
         // Initial state: clear results and hide messages
         clearResults();
         hideMessage();
-        populateSheetSelect([]); // Initialize sheet dropdown as empty/disabled
+        // Fetch data from Google Sheet when the page loads
+        fetchGoogleSheetData();
     </script>
 </body>
 </html>
